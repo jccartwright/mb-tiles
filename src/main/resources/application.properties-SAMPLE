@@ -1,0 +1,11 @@
+spring.datasource.url=jdbc:oracle:thin:@example.com:1521:DBNAME
+spring.datasource.username=user
+spring.datasource.password=pass
+#spring.datasource.driverClassName=oracle.jdbc.OracleDriver
+
+lastrun.file=/Users/jcc/github/mb-tiles/lastrun.txt
+
+logging.level.org.springframework=WARN
+logging.level.org.hibernate=ERROR
+logging.level.org.springframework.test=WARN
+logging.level.ncei.gis=DEBUG
