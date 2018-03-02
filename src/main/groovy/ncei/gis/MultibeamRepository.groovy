@@ -1,42 +1,78 @@
 package ncei.gis
 
 import org.springframework.stereotype.Repository
+import org.springframework.beans.factory.annotation.Autowired
 import groovy.sql.Sql
+import org.springframework.jdbc.core.JdbcTemplate
+import org.springframework.beans.factory.annotation.Value
+import org.slf4j.*
+import groovy.util.logging.Slf4j
 
+
+
+@Slf4j
 @Repository
 class MultibeamRepository {
 
-    //    @Autowired
-    //    JdbcTemplate jdbcTemplate;
+    @Autowired
+    JdbcTemplate jdbcTemplate
 
 
-    List getSurveys() {
-        return []
+    Boolean surveyExists(String surveyId) {
+        def result = jdbcTemplate.queryForList(
+         'select NGDC_ID from MB.SURVEY where NGDC_ID = ?', surveyId
+        )
+        return (result.size() == 1)
     }
 
-    String getSurveyById(String surveyId) {
-        //throw Exception if count != 1
-        return null
+
+    List getSurveysByDate(Date start) {
+        if (! start) {
+            throw new IllegalArgumentException("start date must be specified")
+        }
+
+        List result = jdbcTemplate.queryForList('select NGDC_ID from MB.SURVEY where ENTERED_DATE >= ?', start)
+
+        //hack to accommodate missing ENTERED_DATE values by using END_TIME as proxy
+        result += jdbcTemplate.queryForList('select NGDC_ID from MB.SURVEY where ENTERED_DATE is null and END_TIME >= ?', start)
+        return result['NGDC_ID']
     }
 
-    List getSurveysByDate(start, end) {
-        return []
+
+    List getSurveysByDate(Date start, Date end) {
+        if (! end) {
+            return getSurveysByDate(start)
+        }
+
+        //exclusive of end date
+        List result = jdbcTemplate.queryForList('select NGDC_ID from MB.SURVEY where ENTERED_DATE between ? and ?', start, end)
+
+        //hack to accommodate missing ENTERED_DATE values by using END_TIME as proxy
+        result += jdbcTemplate.queryForList('select NGDC_ID from MB.SURVEY where ENTERED_DATE is null and END_TIME between ? and ?', start, end)
+
+        return result['NGDC_ID']
     }
+
 
     Map getSurveyExtent(String surveyId) {
-        //TODO use JDBC template
-        def query = '''select 
+        Map surveyExtent = jdbcTemplate.queryForMap('''select 
         sdo_geom.sdo_min_mbr_ordinate(shape, 1) minx, 
         sdo_geom.sdo_min_mbr_ordinate(shape, 2) miny,
         sdo_geom.sdo_max_mbr_ordinate(shape, 1) maxx,
         sdo_geom.sdo_max_mbr_ordinate(shape, 2) maxy 
-        from mb.mbinfo_survey_tsql where ngdc_id = ?'''
+        from mb.mbinfo_survey_tsql where ngdc_id = ?''', surveyId)
 
-        def surveyExtent = sql.firstRow(query, [surveyId])
-        if (! surveyExtent) {
-            throw new IllegalStateException("ERROR: survey ${surveyId} is not present in MB.MBINFO_SURVEY_TSQL and cannot be processed.")
+        //check for valid coordinates
+        if (surveyExtent.maxy > 90 || surveyExtent.miny < -90 || surveyExtent.miny > surveyExtent.maxy) {
+            throw new IllegalStateException("survey has invalid latitude values and cannot be processed. miny=${surveyExtent.miny}; maxy=${surveyExtent.maxy}")
         }
-        return surveyExtent  //GroovyRowResult implements java.util.Map
+
+        //minx may be greater than maxx when survey crosses the antimeridian
+        if (surveyExtent.maxx > 180 || surveyExtent.minx < -180) {
+            thrown new IllegalStateException("survey has invalid longitude values and cannot be processed. minx=${surveyExtent.minx}; maxx=${surveyExtent.maxx}")
+        }
+
+        return surveyExtent  //org.springframework.util.LinkedCaseInsensitiveMap
     }
 
 
