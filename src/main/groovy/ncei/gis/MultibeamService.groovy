@@ -10,8 +10,12 @@ import groovy.io.FileType
 @Slf4j
 @Service
 class MultibeamService {
-    @Autowired
-    MultibeamRepository repository
+    private final repository
+
+    //@Autowired optional w/ single constructor
+    MultibeamService(MultibeamRepository repository) {
+        this.repository = repository
+    }
 
     List calcSurveyTiles(String surveyId) {
         def CELLSIZE = 10
@@ -88,6 +92,8 @@ class MultibeamService {
 
         if (surveyExtent.minx > surveyExtent.maxx) {
             //assume AM-crossing survey. split original bbox into two, one on either side of AM.
+            println "survey ${surveyId} appears to cross the antimeridian"
+
             log.debug "survey ${surveyId} appears to cross the antimeridian"
             results += calcTiles([minx: surveyExtent.minx, miny: surveyExtent.miny, maxx: 180.0, maxy: surveyExtent.maxy])
             results += calcTiles([minx: -180, miny: surveyExtent.miny, maxx: surveyExtent.maxx, maxy: surveyExtent.maxy])
@@ -105,6 +111,7 @@ class MultibeamService {
      * survey exceeds CELLSIZE degrees in latitude or longitude
      */
     List calcTiles(coords) {
+        println "inside calcTiles with ${coords}"
         def CELLSIZE = 10
         List results = []
 
