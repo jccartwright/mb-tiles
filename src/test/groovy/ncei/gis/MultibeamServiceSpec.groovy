@@ -10,19 +10,24 @@ class MultibeamServiceSpec extends Specification {
     //@Autowired
     //MultibeamService service
 
-    MultibeamRepository repository = Mock()
-    MultibeamService service = new MultibeamService(repository)
+    //MultibeamRepository repository = Mock()
+    MultibeamService service = new MultibeamService()
 
-    def "get potential tiles for survey"() {
-        given:
-        repository.getSurveyExtent('NEW2602') >> ['minx': 144, 'miny': -8.0, 'maxx': -157, 'maxy': 22]
-
+    def "get potential tiles when survey crosses antimeridian"(Map extent, Integer expectedCount) {
         when:
-        List tiles = service.getPotentialTiles('NEW2602')
+        def tiles = service.getPotentialTiles(extent)
+        println tiles
+
 
         then:
-        2 * service.calcTiles(!null)
-        println tiles
+        tiles.size() == expectedCount
+
+
+        where:
+        extent || expectedCount
+        ['minx': 170, 'miny': -10.0, 'maxx': -170, 'maxy': 10] || 4
+        ['minx': 144, 'miny': -8.0, 'maxx': -157, 'maxy': 22] || 28
+
     }
 
 
@@ -32,12 +37,17 @@ class MultibeamServiceSpec extends Specification {
         service.mroundDown(value, interval) == expected
 
         where:
-        value | interval | expected
-        -144  | 10       | -150
+        value  | interval | expected
+        -144.5   | 10       | -150
+        -145   | 10       | -150
+        -146   | 10       | -150
+        -140.1 | 10      | -150
         144   | 10       | 140
         146   | 10       | 140
         0     | 10       | 0
         146   | 5        | 145
+        170   | 10       | 170
+        -170  | 10       | -170
     }
 
     def "round up by specified interval"(value, interval, expected) {
@@ -46,11 +56,14 @@ class MultibeamServiceSpec extends Specification {
 
         where:
         value | interval | expected
-        -144  | 10       | -140
+        -144.5  | 10       | -140
+        -145    | 10       | -140
         144   | 10       | 150
         146   | 10       | 150
         0     | 10       | 0
         144   | 5        | 145
+        -170  | 10       | -170
+        170   | 10       | 170
     }
 
     def "calculate tiles for given bbox"(bbox, expectedCount) {
@@ -62,8 +75,22 @@ class MultibeamServiceSpec extends Specification {
 
         where:
         bbox                                                     | expectedCount
-        ['minx': 124, 'miny': 2.0, 'maxx': 144, 'maxy': 13]      | 6
-        //'NEW2602' | ['minx': 144, 'miny': -8.0, 'maxx': -157, 'maxy': 22]    | 16
+        //['minx': 124, 'miny': 2.0, 'maxx': 144, 'maxy': 13]      | 6
+        ['minx': -180, 'miny': -10.0, 'maxx': -170, 'maxy': 10]      | 2
+        ['minx': 170, 'miny': -10.0, 'maxx': 180, 'maxy': 10]      | 2
+    }
+
+
+    def "remove nonexistent files"() {
+        given:
+        List fileList = ['README.md', 'build.gradle', 'nosuchfile']
+        List expectedFileList = ['README.md', 'build.gradle']
+
+        when:
+        service.removeNonexistentFiles(fileList)
+
+        then:
+        expectedFileList.equals(fileList)
     }
 
 }

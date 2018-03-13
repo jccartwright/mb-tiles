@@ -47,12 +47,12 @@ class Application implements CommandLineRunner {
         cli.with {
             h longOpt: 'help', 'Show usage information'
             _ longOpt: 'survey', args: 1, argName: 'surveyId', 'generate tile(s) for given survey'
-            _ longOpt: 'start', args: 1, argName: 'start date', 'limit to surveys after this date. Overrides lastrun file'
-            _ longOpt: 'end', args: 1, argName: 'end date', 'limit to surveys before this date'
+            _ longOpt: 'start', args: 1, argName: 'start date', 'formated as yyyy-MM-dd, limit to surveys after this date. Overrides lastrun file'
+            _ longOpt: 'end', args: 1, argName: 'end date', 'formated as yyyy-MM-dd, limit to surveys before this date'
             _ longOpt: 'batch', args: 1, argName: 'filename', 'write commands to specified shell script'
             _ longOpt: 'dryrun', 'print out actions without actually executing commands'
             _ longOpt: 'cleanup', 'remove unneeded files or those without any valid data'
-            _ longOpt: 'report', 'report on survey products'
+            _ longOpt: 'report', 'report on survey products and exit. Overrides other options'
             _ longOpt: 'output', args: 1, argName: 'filename', 'required': true, 'output directory to use. required'
         }
         def options = cli.parse(strings)
@@ -113,54 +113,76 @@ class Application implements CommandLineRunner {
             surveys = [options.survey]
         }
 
-        if (options.output) {
-            outputDir = new File(options.output)
-            if (outputDir.exists()) {
-                log.info "using existing output directory ${outputDir}"
-            } else {
-                log.info "creating new output directory ${outputDir}"
-                assert outputDir.mkdirs()
-            }
+        //outputDir is required option
+        outputDir = new File(options.output)
+        if (outputDir.exists()) {
+            log.info "using existing output directory ${outputDir}"
+        } else {
+            log.info "creating new output directory ${outputDir}"
+            assert outputDir.mkdirs()
         }
+        service.outputDir = outputDir
 
-        //TODO should output option be required w/ batch
-        if (options.batch) {
-            cmds = new File(outputDir, options.batch)
-            if (cmds.exists()) {
-                log.info "removing exisiting batch file ${cmds}"
-                cmds.delete()
-            }
-            cmds.write "# batch file generated ${new Date()}\n"
+        if (options.report) {
+            //report and exit
+            log.debug "reporting on grids found in ${outputDir}"
+            log.info service.gridReport()
+
+            return
         }
-
-        //////////////////////////////////////
-        //DEBUG: reset surveys to force use of date range
-        surveys = null
-        //////////////////////////////////////
-
         //use date range to locate surveys to process
         if (! surveys) {
             surveys = repository.getSurveysByDate(startDate, endDate)
         }
 
+        println 'ls -l'.execute().text
 
-        repository.getSurveyExtent('NEW2597')
-
-        surveys.each { surveyId ->
-            log.debug "processing survey ${surveyId}..."
-            if (options.batch) {
-                cmds << "## survey ${surveyId} ##\n"
-            }
-
-            service.cleanupFiles(outputDir, surveyId)
-
-            List potentialTiles = service.getPotentialTiles(surveyId)
-
+        //choose implementation of ProcessingOperations based on command-line params
+        ProcessingOperations processingOperations
+        if (options.batch) {
+            processingOperations = new BatchProcessingOperations(outputDir, options.batch)
+        } else if (options.dryrun) {
+            processingOperations = new DryRunProcessingOperations()
+        } else {
+            processingOperations = new InprocessProcessingOperations()
         }
 
-    }
+        surveys.each { survey ->
+            //remove any files from previous execution of this survey
+            service.cleanupOutputDir(survey)
+
+            //get the survey's MBR
+            Map surveyExtent = repository.getSurveyExtent(survey)
+
+            List potentialTiles = service.getPotentialTiles(surveyExtent)
+            log.info "${potentialTiles.size()} potential tiles calculated for survey ${survey}..."
+
+            potentialTiles.each { potentialTile ->
+                //each potentialTile is [minx,miny,maxx,maxy]
+
+                //may be empty list. List of Maps with keys DATA_FILE, MBIO_FORMAT
+                List surveyFiles = repository.getSurveyFiles(potentialTile, survey)
+                service.removeNonexistentFiles(surveyFiles)
+
+                List<File> surveyManifestFiles = service.generateSurveyFileManifest(potentialTile, survey, surveyFiles)
+
+                List<File> gridFiles = []
+                surveyManifestFiles.each { surveyManifestFile ->
+                    gridFiles.push( processingOperations.createGrid(potentialTile, survey, surveyManifestFile) )
+                }
+
+                List<File> lercFiles = []
+                gridFiles.each { gridFile ->
+                    lercFiles.push ( processingOperations.createLERC(gridFile) )
+                }
+
+            }
+        }
+
+        processingOperations.cleanupSurvey()
+    } //end run
 
 
-
+    //a tile is identified by it's bounding coordinates and surveyId (NGDC_ID)
 
 }

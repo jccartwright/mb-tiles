@@ -76,10 +76,13 @@ class MultibeamRepository {
     }
 
 
+    /**
+     * return a list of all survey files which fall w/in the specified area and have the specified survey identifier
+     */
     List getSurveyFiles(List coords, String survey) {
         String bbox = "POLYGON((${coords[0]} ${coords[1]}, ${coords[2]} ${coords[1]}, ${coords[2]} ${coords[3]}, ${coords[0]} ${coords[3]}, ${coords[0]} ${coords[1]}))"
 
-        def query = """select
+        String query = '''select
             DATA_FILE, MBIO_FORMAT_ID
         from
             MB.MBINFO_FILE_TSQL a
@@ -89,12 +92,18 @@ class MultibeamRepository {
             MDSYS.SDO_GEOMETRY(?, 8307),
             'mask=anyinteract querytype=window'
         ) = 'TRUE' and NGDC_ID = ? and MBIO_FORMAT_ID in (162, 58)
-        order by DATA_FILE"""
+        order by DATA_FILE'''
 
-        sql.rows(query, [bbox, survey])
+        List results = jdbcTemplate.queryForList(query, bbox, survey)
+
+        if (results.size() == 0) {
+            log.info "no survey files found for survey ${survey} in area ${bbox}"
+            //throw new Exception("no survey files found for survey ${survey} in area ${coords}")
+        } else {
+            log.debug "${results.size()} files found for survey ${survey} in area ${bbox}"
+        }
+        return results
     }
-
-
 }
 
 
