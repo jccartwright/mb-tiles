@@ -174,7 +174,10 @@ class Application implements CommandLineRunner {
                 if (surveyFiles.size() > 0) {
                     surveyManifestFiles = service.generateSurveyFileManifest(potentialTile, survey, surveyFiles)
                 } else {
-                    log.warn "no valid survey files found for survey ${survey} and bbox ${potentialTile}"
+                    //TODO why doesn't log work here
+                    //log.warn "no valid survey files found for survey ${survey} and bbox ${potentialTile}"
+                    println "no valid survey files found for survey ${survey} and bbox ${potentialTile}"
+
                 }
 
                 List<File> gridFiles = []
@@ -190,7 +193,9 @@ class Application implements CommandLineRunner {
             }
         }
 
-        processingOperations.cleanupSurvey()
+        if (options.cleanup) {
+            processingOperations.cleanupSurvey()
+        }
     } //end run
 
 
