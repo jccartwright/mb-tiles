@@ -54,6 +54,7 @@ class Application implements CommandLineRunner {
             _ longOpt: 'cleanup', 'remove unneeded files or those without any valid data'
             _ longOpt: 'report', 'report on survey products and exit. Overrides other options'
             _ longOpt: 'output', args: 1, argName: 'filename', 'required': true, 'output directory to use. required'
+            _ longOpt: 'skipchecks', 'skip the checks for existence of survey files in manifest'
         }
         def options = cli.parse(strings)
 
@@ -67,6 +68,10 @@ class Application implements CommandLineRunner {
         if (options.h) {
             cli.usage()
             return
+        }
+
+        if (options.skipchecks) {
+            log.info "skipping checks for existence of survey files in manifest"
         }
 
         if (options.start) {
@@ -135,8 +140,6 @@ class Application implements CommandLineRunner {
             surveys = repository.getSurveysByDate(startDate, endDate)
         }
 
-        println 'ls -l'.execute().text
-
         //choose implementation of ProcessingOperations based on command-line params
         ProcessingOperations processingOperations
         if (options.batch) {
@@ -162,7 +165,10 @@ class Application implements CommandLineRunner {
 
                 //may be empty list. List of Maps with keys DATA_FILE, MBIO_FORMAT
                 List surveyFiles = repository.getSurveyFiles(potentialTile, survey)
-                service.removeNonexistentFiles(surveyFiles)
+
+                if (! options.skipchecks) {
+                    service.removeNonexistentFiles(surveyFiles)
+                }
 
                 List<File> surveyManifestFiles = service.generateSurveyFileManifest(potentialTile, survey, surveyFiles)
 
