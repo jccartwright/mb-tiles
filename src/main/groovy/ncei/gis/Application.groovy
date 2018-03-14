@@ -26,7 +26,7 @@ class Application implements CommandLineRunner {
     MultibeamService service
 
     @Value('${lastrun.file}')
-    lastRunFilename  //absolute path to file
+    String lastRunFilename  //absolute path to file
 
 
     static void main(String[] args) {
@@ -94,11 +94,11 @@ class Application implements CommandLineRunner {
                     log.error "invalid date format in ${lastRunFile}"
                 }
             }
-            log.info "start date is ${startDate}"
+            if (startDate) { log.info "start date is ${startDate}" }
         }
 
-        if (options.end) {
-            //TODO only allow end date in conjunction w/ start date?
+        if (startDate && options.end) {
+            //only allow end date in conjunction w/ start date
             try {
                 //defaults to local time zone
                 endDate = Date.parse('yyyy-MM-dd', options.end)
@@ -170,7 +170,12 @@ class Application implements CommandLineRunner {
                     service.removeNonexistentFiles(surveyFiles)
                 }
 
-                List<File> surveyManifestFiles = service.generateSurveyFileManifest(potentialTile, survey, surveyFiles)
+                List<File> surveyManifestFiles = []
+                if (surveyFiles.size() > 0) {
+                    surveyManifestFiles = service.generateSurveyFileManifest(potentialTile, survey, surveyFiles)
+                } else {
+                    log.warn "no valid survey files found for survey ${survey} and bbox ${potentialTile}"
+                }
 
                 List<File> gridFiles = []
                 surveyManifestFiles.each { surveyManifestFile ->

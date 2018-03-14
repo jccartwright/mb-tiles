@@ -81,16 +81,26 @@ class MultibeamServiceSpec extends Specification {
     }
 
 
-    def "remove nonexistent files"() {
-        given:
-        List fileList = ['README.md', 'build.gradle', 'nosuchfile']
-        List expectedFileList = ['README.md', 'build.gradle']
+    def "build FBT filename"() {
+        expect:
+        service.buildFbtFilename(catalogEntry) == expectedFilename
 
-        when:
-        service.removeNonexistentFiles(fileList)
+        where:
+        catalogEntry | expectedFilename
+        'ocean/ships/fugro_americas/FA170008/multibeam/data/version1/MB/em302/0238_20170226_070147_Fugro_Americas.all.mb58.gz' | '/mgg/MB/ocean/ships/fugro_americas/FA170008/multibeam/data/version1/MB/em302/0238_20170226_070147_Fugro_Americas.all.mb58.fbt'
+        'ocean/ships/fugro_americas/FA170008/multibeam/data/version1/MB/em302/0238_20170226_070147_Fugro_Americas.all.mb58'    | '/mgg/MB/ocean/ships/fugro_americas/FA170008/multibeam/data/version1/MB/em302/0238_20170226_070147_Fugro_Americas.all.mb58.fbt'
 
-        then:
-        expectedFileList.equals(fileList)
     }
+//    def "remove nonexistent files"() {
+//        given:
+//        List fileList = [['DATA_FILE':'README.md', 'DATA_FILE':'build.gradle', 'DATA_FILE':'nosuchfile']]
+//        List expectedFileList = [['DATA_FILE':'README.md', 'DATA_FILE':'build.gradle']]
+//
+//        when:
+//        service.removeNonexistentFiles(fileList)
+//
+//        then:
+//        expectedFileList.equals(fileList)
+//    }
 
 }

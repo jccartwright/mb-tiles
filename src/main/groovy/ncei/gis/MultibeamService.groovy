@@ -48,18 +48,18 @@ class MultibeamService {
             def counter = 0
             parts.each { part ->
 
-                def fileName = "mbtile_${survey}_${coords[0]}_${coords[1]}_${counter}_v${version}.mbf"
-                def mbfFile = new File(outputDir, fileName)
+                def manifestFileName = "mbtile_${survey}_${coords[0]}_${coords[1]}_${counter}_v${version}.mbf"
+                def mbfFile = new File(outputDir, manifestFileName)
 
                 log.debug "generating mbfFile ${mbfFile}..."
                 part.each {
-                    def filename = it.DATA_FILE
-                    if (filename.endsWith('.gz')) {
-                        //*.gz implies presence of fbt file and that is preferred
-                        filename = filename.substring (0, filename.lastIndexOf(".gz"))
-                        mbfFile << "/mgg/MB/${filename}.fbt 71\n"    //"71" is FBT
-                    } else {
-                        mbfFile << "/mgg/MB/${filename} ${it.MBIO_FORMAT_ID}\n"
+                    //assume that there will always be a corresponding fbt file
+                    String surveyFileName = buildFbtFilename(it.DATA_FILE)
+                    mbfFile << "${surveyFileName} 71\n"
+
+                    //check for inconsistencies in file catalog
+                    if (! it.DATA_FILE.endsWith('.gz')) {
+                        log.warn "survey file catalog for survey ${survey} shows uncompressed file"
                     }
                 }
                 mbfFiles.push(mbfFile)
@@ -68,6 +68,18 @@ class MultibeamService {
         }
 
         return mbfFiles
+    }
+
+    /**
+     * construct fully qualified FBT filename according to conventions
+     * WARNING: contains hardcoded paths
+     */
+    String buildFbtFilename(String filename) {
+        if (filename.endsWith('.gz')) {
+            //strip off .gz extension
+            filename = filename.substring (0, filename.lastIndexOf(".gz"))
+        }
+        return "/mgg/MB/${filename}.fbt"
     }
 
 
@@ -176,18 +188,26 @@ class MultibeamService {
 
     // mutates the provided list to remove non-existent files
     void removeNonexistentFiles(List surveyFiles) {
-        println surveyFiles
+        def originalSize = surveyFiles.size()
+        if (originalSize == 0) { return }
+
+        //remove from the list any files not found on disk
         surveyFiles.removeAll {
-            String filename = it.split()[0]
+            //assuming that an FBT file exists for all survey files
+            String filename = buildFbtFilename(it['DATA_FILE'])
             File file = new File(filename)
-            if (! file.exists()) {
-                log.warn "Survey file ${file} not found - removing from survey file list"
+            if (! file.exists() || file.size() == 0) {
+                log.warn "Survey file ${file} not found or zero length - removing from survey file list"
                 return true
             }
-            //leave in list
-            return false
         }
-        println surveyFiles
+
+        def modifiedSize = surveyFiles.size()
+        if (originalSize == modifiedSize) {
+            log.debug "found all ${originalSize} survey files"
+        } else {
+            log.warn "only found ${modifiedSize} of ${originalSize} survey files"
+        }
     }
 
 
